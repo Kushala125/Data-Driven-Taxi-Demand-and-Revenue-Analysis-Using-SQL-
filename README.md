@@ -9,19 +9,19 @@ Before analysis could begin, the raw data required a rigorous "cleaning odyssey"
 The foundation of this project lies in a robust SQL-based ETL (Extract, Transform, Load) process. Before any visualization could occur, the dataset underwent a multi-stage refinement to ensure data integrity and high-performance querying.
 The raw dataset contained inconsistent naming conventions and formatting issues. Columns were renamed for better readability, and empty values were normalized.
 
--- Standardizing column names
+## Standardizing column names
 ALTER TABLE taxi1 RENAME COLUMN trip_start_timestamp TO start_ts;
 ALTER TABLE taxi1 RENAME COLUMN trip_end_timestamp TO end_ts;
 ALTER TABLE taxi1 RENAME COLUMN trip_seconds TO trp_sec;
 ALTER TABLE taxi1 RENAME COLUMN trip_miles TO trp_mi;
 
--- Converting empty strings to NULL
+## -- Converting empty strings to NULL
 UPDATE taxi1
 SET 
     trp_sec = NULLIF(trp_sec, ''),
     trp_mi  = NULLIF(trp_mi, ''),
     fare    = NULLIF(fare, '');
-🔄 2. Advanced Data Imputation
+## 2. Advanced Data Imputation
 
 Instead of removing missing values, mean imputation was applied to maintain dataset distribution and avoid bias.
 
@@ -38,7 +38,7 @@ SET
     t.trp_mi  = IFNULL(t.trp_mi, a.avg_mi);
 ⏱️ 3. Temporal Feature Engineering
 
-Extracted time-based features to support trend analysis and behavioral insights.
+## Extracted time-based features to support trend analysis and behavioral insights.
 
 SELECT 
     trip_id,
@@ -50,7 +50,7 @@ SELECT
         ELSE 'Weekday' 
     END AS day_type
 FROM taxi1;
-📊 4. Advanced Analytics (Window Functions)
+## 📊 4. Advanced Analytics (Window Functions)
 🔹 Percentile Ranking (Outlier Detection)
 
 Identified the top 5% longest trips using window functions.
@@ -63,7 +63,7 @@ SELECT * FROM (
     FROM taxi1
 ) t 
 WHERE duration_percentile >= 0.95;
-🔹 Moving Average (Trend Smoothing)
+## 🔹 Moving Average (Trend Smoothing)
 
 Calculated a 10-trip rolling average to analyze fare trends over time.
 
@@ -75,7 +75,7 @@ SELECT
         ROWS BETWEEN 9 PRECEDING AND CURRENT ROW
     ) AS moving_avg_fare
 FROM taxi1;
-✅ 5. Data Integrity Audit
+## ✅ 5. Data Integrity Audit
 
 Ensured dataset accuracy by removing invalid or impossible records.
 
