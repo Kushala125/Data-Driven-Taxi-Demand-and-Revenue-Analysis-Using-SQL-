@@ -6,40 +6,77 @@ This project began with a simple question: How does a city move? By diving into 
 
 ## 2. The Data Architecture (SQL)
 Before analysis could begin, the raw data required a rigorous "cleaning odyssey" to transform it from a chaotic collection of entries into a high-performance analytical dataset.
+The foundation of this project lies in a robust SQL-based ETL (Extract, Transform, Load) process. Before any visualization could occur, the dataset underwent a multi-stage refinement to ensure data integrity and high-performance querying.
 
-Data Cleaning & Standardization
-We began by standardizing the schema and addressing integrity issues such as missing values and duplicates:
-
-
-Header Refactoring: Renamed columns to intuitive shorthands (e.g., trip_start_timestamp to start_ts) for cleaner query logic.
-
-
-The "Void" Conversion: Converted empty strings to NULL across all critical metrics like trp_sec, trp_mi, and fare.
-
-
-Imputation Strategy: Missing numerical values were filled with the dataset's average to maintain statistical consistency, while missing geographic coordinates were defaulted to 0.
-
-
-Duplicate Purging: Used self-joins to identify and delete redundant trip_id entries, ensuring a unique record for every journey.
+1. Schema Optimization & Standardization
+The raw dataset contained cumbersome column names and inconsistent formatting. The first step was to refactor the schema for developer efficiency and readability.
 
 SQL
--- Example: Cleaning and Standardizing Headers
+-- Standardizing headers for cleaner query syntax
 ALTER TABLE taxi1 RENAME COLUMN trip_start_timestamp TO start_ts;
+ALTER TABLE taxi1 RENAME COLUMN trip_end_timestamp TO end_ts;
+ALTER TABLE taxi1 RENAME COLUMN trip_seconds TO trp_sec;
 ALTER TABLE taxi1 RENAME COLUMN trip_miles TO trp_mi;
 
--- Example: Handling NULL values with Mean Imputation
+-- Normalizing empty strings to NULL to maintain mathematical integrity
+UPDATE taxi1
+SET 
+    trp_sec = NULLIF(trp_sec, ''),
+    trp_mi  = NULLIF(trp_mi, ''),
+    fare    = NULLIF(fare, '');
+2. Advanced Data Imputation
+To prevent bias in our averages, we moved beyond simple deletion of missing values. We implemented a strategy of Mean Imputation, filling gaps in critical metrics with the dataset average to preserve the overall distribution.
+
+SQL
 UPDATE taxi1 t
 JOIN (SELECT AVG(trp_sec) AS avg_sec, AVG(trp_mi) AS avg_mi FROM taxi1) a
 SET t.trp_sec = IFNULL(t.trp_sec, a.avg_sec),
     t.trp_mi  = IFNULL(t.trp_mi, a.avg_mi);
-Advanced Feature Engineering
-SQL was further used to generate complex temporal and performance features:
+3. Temporal Feature Engineering
+To enable time-series analysis, we extracted granular time features. This allowed us to shift from viewing "trips" to viewing "trends."
 
+SQL
+-- Generating time-based dimensions for rush hour analysis
+SELECT 
+    trip_id,
+    start_ts,
+    HOUR(start_ts) AS pickup_hour,
+    DAYNAME(start_ts) AS day_of_week,
+    CASE 
+        WHEN DAYOFWEEK(start_ts) IN (1, 7) THEN 'Weekend'
+        ELSE 'Weekday' 
+    END AS day_type
+FROM taxi1;
+4. Advanced Window Functions (The Insights Layer)
+The most sophisticated part of the SQL section involves Analytical Window Functions. We utilized these to identify outliers and perform "Moving Average" smoothing to see past the noise of individual high-fare trips.
 
-Window Functions: Applied ROW_NUMBER() and PERCENT_RANK() to identify the top 5% of longest trips and daily duration leaders.
+Percentile Ranking: We identified the top 5% of trips by duration to isolate long-haul outliers.
 
+Moving Averages: A 10-trip rolling average for fares was calculated to visualize revenue stability over time.
 
-Moving Averages: Calculated a 10-trip rolling average for fares to smooth out volatility and identify long-term revenue trends.
+SQL
+-- Calculating the Top 5% Longest Trips
+SELECT * FROM (
+    SELECT 
+        trip_id, 
+        trp_sec,
+        PERCENT_RANK() OVER (ORDER BY trp_sec) AS duration_percentile
+    FROM taxi1
+) t WHERE duration_percentile >= 0.95;
+
+-- 10-Trip Rolling Revenue Average
+SELECT 
+    trip_id, 
+    fare,
+    AVG(fare) OVER(ORDER BY start_ts ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS moving_avg_fare
+FROM taxi1;
+5. Data Integrity Audit
+Final validation checks were performed to ensure no "impossible" data points (e.g., negative trip durations or miles) remained in the production-ready table.
+
+SQL
+-- Removing physical impossibilities
+DELETE FROM taxi1 
+WHERE trp_sec <= 0 OR trp_mi <= 0 OR fare < 0;
 
 ## 3. Behavioral Deep Dive (Python)
 With a clean foundation, Python was employed to perform high-level statistical analysis and uncover the "why" behind the data.
